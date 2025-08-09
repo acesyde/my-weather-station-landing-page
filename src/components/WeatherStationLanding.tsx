@@ -254,7 +254,10 @@ const UnitSystem = {
 } as const;
 
 function useI18n() {
-  const [lang] = useState<Lang>(() => detectLocale());
+  const [lang, setLang] = useState<Lang>("en");
+  useEffect(() => {
+    setLang(detectLocale());
+  }, []);
   const t = (key: TranslationKey) => translations[lang][key];
   return { lang, t };
 }
@@ -447,7 +450,9 @@ export default function WeatherStationLanding() {
                   {online ? t("online") : t("offline")}
                 </span>
                 <TimerReset className="h-4 w-4" />
-                <span className="text-sm">{t("updated")} {fmtRelative(latest?.timestamp, lang)}</span>
+                <span className="text-sm" suppressHydrationWarning>
+                  {t("updated")} {fmtRelative(latest?.timestamp, lang)}
+                </span>
               </div>
             </div>
             <div className="flex items-center gap-2">
