@@ -1,191 +1,22 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
 import { Thermometer, Droplets, Wind, Gauge, CloudRain, SunDim, MapPin, TimerReset, Leaf } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, Area, AreaChart } from "recharts";
-import type { CSSProperties } from "react";
+import AnimatedBackground from "@/components/weather/AnimatedBackground";
+import ChartCard from "@/components/weather/ChartCard";
+import ChartTooltip from "@/components/weather/ChartTooltip";
+import SensorCard from "@/components/weather/SensorCard";
+import UnitToggle from "@/components/weather/UnitToggle";
+import { useI18n } from "@/components/weather/i18n";
+import { UnitSystem, useUnitToggle, toF, toKPH, toMPH, toInHg, toIn } from "@/components/weather/UnitSystem";
+import type { LatestWeather, HistoryPoint } from "@/components/weather/types";
+import { fmtRelative, degToCompass, uvCategory, aqiCategory } from "@/components/weather/utils";
+import { cn } from "@/lib/utils";
 
 const API_BASE = "";
 const AUTO_REFRESH_MS = 30_000;
-
-// ---- i18n (en/fr) ----
-type Lang = "en" | "fr";
-
-type TranslationKey =
-  | "weatherStation"
-  | "online"
-  | "offline"
-  | "updated"
-  | "refresh"
-  | "sampleDataError"
-  | "sampleDataHint"
-  | "temperature"
-  | "humidity"
-  | "pressure"
-  | "wind"
-  | "rain"
-  | "uvIndex"
-  | "uvShort"
-  | "solar"
-  | "airQuality"
-  | "air"
-  | "relative"
-  | "seaLevelApprox"
-  | "gust"
-  | "today"
-  | "globalIrradiance"
-  | "trends"
-  | "last24h"
-  | "mean"
-  | "metric"
-  | "imperial"
-  | "autoRefreshEvery"
-  | "secondsShort"
-  | "uvLow"
-  | "uvModerate"
-  | "uvHigh"
-  | "uvVeryHigh"
-  | "uvExtreme"
-  | "aqiGood"
-  | "aqiModerate"
-  | "aqiSensitive"
-  | "aqiUnhealthy"
-  | "aqiVeryUnhealthy"
-  | "aqiHazardous";
-
-const translations: Record<Lang, Record<TranslationKey, string>> = {
-  en: {
-    weatherStation: "Weather Station",
-    online: "Online",
-    offline: "Offline",
-    updated: "Updated",
-    refresh: "Refresh",
-    sampleDataError: "Running on sample data. Connect your API.",
-    sampleDataHint: "update API_BASE & endpoints when ready.",
-    temperature: "Temperature",
-    humidity: "Humidity",
-    pressure: "Pressure",
-    wind: "Wind",
-    rain: "Rain",
-    uvIndex: "UV Index",
-    uvShort: "UV",
-    solar: "Solar",
-    airQuality: "Air Quality",
-    air: "Air",
-    relative: "Relative",
-    seaLevelApprox: "Sea‑level approx.",
-    gust: "Gust",
-    today: "Today",
-    globalIrradiance: "Global irradiance",
-    trends: "Trends",
-    last24h: "last 24h",
-    mean: "Mean",
-    metric: "Metric",
-    imperial: "Imperial",
-    autoRefreshEvery: "Auto‑refresh every",
-    secondsShort: "s",
-    uvLow: "Low",
-    uvModerate: "Moderate",
-    uvHigh: "High",
-    uvVeryHigh: "Very High",
-    uvExtreme: "Extreme",
-    aqiGood: "Good",
-    aqiModerate: "Moderate",
-    aqiSensitive: "Sensitive",
-    aqiUnhealthy: "Unhealthy",
-    aqiVeryUnhealthy: "Very Unhealthy",
-    aqiHazardous: "Hazardous",
-  },
-  fr: {
-    weatherStation: "Station météo",
-    online: "En ligne",
-    offline: "Hors ligne",
-    updated: "Mis à jour",
-    refresh: "Actualiser",
-    sampleDataError: "Utilisation de données d'exemple. Connectez votre API.",
-    sampleDataHint: "mettez à jour API_BASE et les endpoints lorsque prêt.",
-    temperature: "Température",
-    humidity: "Humidité",
-    pressure: "Pression",
-    wind: "Vent",
-    rain: "Pluie",
-    uvIndex: "Indice UV",
-    uvShort: "UV",
-    solar: "Solaire",
-    airQuality: "Qualité de l’air",
-    air: "Air",
-    relative: "Relative",
-    seaLevelApprox: "Niveau de la mer (approx.)",
-    gust: "Rafale",
-    today: "Aujourd’hui",
-    globalIrradiance: "Irradiance globale",
-    trends: "Tendances",
-    last24h: "dernières 24 h",
-    mean: "Moyenne",
-    metric: "Métrique",
-    imperial: "Impérial",
-    autoRefreshEvery: "Rafraîchissement auto toutes les",
-    secondsShort: "s",
-    uvLow: "Faible",
-    uvModerate: "Modéré",
-    uvHigh: "Élevé",
-    uvVeryHigh: "Très élevé",
-    uvExtreme: "Extrême",
-    aqiGood: "Bon",
-    aqiModerate: "Modéré",
-    aqiSensitive: "Sensible",
-    aqiUnhealthy: "Mauvais",
-    aqiVeryUnhealthy: "Très mauvais",
-    aqiHazardous: "Dangereux",
-  },
-};
-
-function detectLocale(): Lang {
-  try {
-    const nav = typeof navigator !== "undefined" ? navigator : undefined;
-    const raw = nav?.language || nav?.languages?.[0] || "en";
-    return raw.toLowerCase().startsWith("fr") ? "fr" : "en";
-  } catch {
-    return "en";
-  }
-}
-
-interface LocationInfo {
-  name?: string;
-  lat?: number;
-  lon?: number;
-}
-
-interface LatestWeather {
-  station_name?: string;
-  location?: LocationInfo;
-  timestamp?: string;
-  temperature_c?: number;
-  humidity_pct?: number;
-  pressure_hpa?: number;
-  wind_speed_ms?: number;
-  wind_gust_ms?: number;
-  wind_dir_deg?: number;
-  rain_rate_mm_h?: number;
-  rain_daily_mm?: number;
-  uv_index?: number;
-  solar_w_m2?: number;
-  aqi?: number;
-}
-
-interface HistoryPoint {
-  t: string;
-  temperature_c?: number;
-  humidity_pct?: number;
-  pressure_hpa?: number;
-  wind_speed_ms?: number;
-  wind_gust_ms?: number;
-  rain_rate_mm_h?: number;
-  rain_daily_mm?: number;
-  uv_index?: number;
-}
 
 const SAMPLE_LATEST: LatestWeather = {
   station_name: "Maison de Acesyde",
@@ -225,75 +56,6 @@ const SAMPLE_HISTORY: HistoryPoint[] = Array.from({ length: 24 }).map((_, i) => 
   };
 });
 
-function cn(...classes: Array<string | undefined | false>) {
-  return classes.filter(Boolean).join(" ");
-}
-
-function fmtRelative(iso?: string, lang: Lang = "en") {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = Math.round((now.getTime() - d.getTime()) / 1000);
-  if (diff < 60) return lang === "fr" ? `il y a ${diff}s` : `${diff}s ago`;
-  if (diff < 3600) return lang === "fr" ? `il y a ${Math.floor(diff / 60)}m` : `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return lang === "fr" ? `il y a ${Math.floor(diff / 3600)}h` : `${Math.floor(diff / 3600)}h ago`;
-  return d.toLocaleString(lang);
-}
-
-function degToCompass(deg?: number) {
-  if (deg == null) return "—";
-  const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
-  const idx = Math.round(((deg % 360) / 22.5)) % 16;
-  return dirs[idx];
-}
-
-const UnitSystem = {
-  METRIC: "metric",
-  IMPERIAL: "imperial",
-} as const;
-
-function useI18n() {
-  const [lang, setLang] = useState<Lang>("en");
-  useEffect(() => {
-    setLang(detectLocale());
-  }, []);
-  const t = (key: TranslationKey) => translations[lang][key];
-  return { lang, t };
-}
-
-function useUnitToggle() {
-  const [unit, setUnit] = useState<typeof UnitSystem[keyof typeof UnitSystem]>(() => {
-    try {
-      const saved = typeof window !== "undefined" ? localStorage.getItem("unitSystem") : null;
-      return saved === UnitSystem.IMPERIAL || saved === UnitSystem.METRIC ? saved : UnitSystem.METRIC;
-    } catch {
-      return UnitSystem.METRIC;
-    }
-  });
-  useEffect(() => {
-    try {
-      localStorage.setItem("unitSystem", unit);
-    } catch {}
-  }, [unit]);
-  return { unit, setUnit };
-}
-
-function toF(c?: number) {
-  return c == null ? undefined : (c * 9) / 5 + 32;
-}
-function toMPH(ms?: number) {
-  return ms == null ? undefined : ms * 2.236936;
-}
-function toKPH(ms?: number) {
-  return ms == null ? undefined : ms * 3.6;
-}
-function toInHg(hpa?: number) {
-  return hpa == null ? undefined : hpa * 0.0295299830714;
-}
-function toIn(mm?: number) {
-  return mm == null ? undefined : mm / 25.4;
-}
-
 async function fetchJSON<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -325,7 +87,7 @@ export default function WeatherStationLanding() {
         const message = e instanceof Error ? e.message : String(e);
         console.warn("Using sample data (API not reachable)", message);
         if (!cancelled) {
-          setError(translations[lang].sampleDataError);
+          setError(t("sampleDataError"));
           // Ensure sample data is applied so changes to SAMPLE_* are reflected during dev
           setLatest(SAMPLE_LATEST);
           setHistory(SAMPLE_HISTORY);
@@ -338,7 +100,7 @@ export default function WeatherStationLanding() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [lang]);
+  }, [lang, t]);
 
   const online = useMemo(() => {
     if (!latest?.timestamp) return false;
@@ -472,9 +234,9 @@ export default function WeatherStationLanding() {
           <SensorCard title={t("pressure")} value={display.pressure} icon={<Gauge />} subtitle={t("seaLevelApprox")} />
           <SensorCard title={t("wind")} value={`${display.windSpeed}`} icon={<Wind />} subtitle={`${t("gust")} ${display.windGust} • ${degToCompass(display.windDir)} (${display.windDir ?? "—"}°)`} />
           <SensorCard title={t("rain")} value={display.rainRate} icon={<CloudRain />} subtitle={`${t("today")} ${display.rainDaily}`} />
-          <SensorCard title={t("uvIndex")} value={String(display.uv)} icon={<SunDim />} subtitle={uvCategory(latest?.uv_index, lang)} />
+          <SensorCard title={t("uvIndex")} value={String(display.uv)} icon={<SunDim />} subtitle={uvCategory(latest?.uv_index, t)} />
           <SensorCard title={t("solar")} value={String(display.solar)} icon={<SunDim />} subtitle={t("globalIrradiance")} />
-          <SensorCard title={t("airQuality")} value={String(display.aqi)} icon={<Leaf />} subtitle={aqiCategory(latest?.aqi, lang)} />
+          <SensorCard title={t("airQuality")} value={String(display.aqi)} icon={<Leaf />} subtitle={aqiCategory(latest?.aqi, t)} />
         </section>
 
         <section className="mt-10">
@@ -607,263 +369,6 @@ export default function WeatherStationLanding() {
           <span className="opacity-80">{t("autoRefreshEvery")} {AUTO_REFRESH_MS / 1000}{t("secondsShort")}</span>
         </div>
       </footer>
-    </div>
-  );
-}
-
-function UnitToggle({ unit, onChange }: { unit: typeof UnitSystem[keyof typeof UnitSystem]; onChange: (u: typeof UnitSystem[keyof typeof UnitSystem]) => void }) {
-  const { t } = useI18n();
-  return (
-    <div className="inline-flex rounded-2xl bg-white/60 backdrop-blur border border-slate-200 overflow-hidden dark:bg-slate-800/60 dark:border-slate-700">
-      <button onClick={() => onChange(UnitSystem.METRIC)} className={cn("px-3 py-1.5 text-sm", unit === UnitSystem.METRIC ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300")}>{t("metric")}</button>
-      <button onClick={() => onChange(UnitSystem.IMPERIAL)} className={cn("px-3 py-1.5 text-sm", unit === UnitSystem.IMPERIAL ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300")}>{t("imperial")}</button>
-    </div>
-  );
-}
-
-function SensorCard({ title, value, icon, subtitle }: { title: string; value: string; icon: React.ReactNode; subtitle?: string }) {
-  return (
-    <Card className="rounded-2xl shadow-sm hover:shadow transition-shadow bg-white/70 dark:bg-slate-900/60 backdrop-blur border-slate-200/80 dark:border-slate-800">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200">{icon}</span>
-            {title}
-          </CardTitle>
-          {subtitle && <span className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</span>}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl md:text-4xl font-black tracking-tight tabular-nums">{value}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Card className="rounded-2xl border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur">
-      <CardHeader className="pb-0">
-        <CardTitle className="text-base font-semibold">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-4">{children}</CardContent>
-    </Card>
-  );
-}
-
-type RechartsTooltipEntry = { name?: string; value?: number | string; color?: string };
-type RechartsTooltipData = { active?: boolean; label?: string | number; payload?: RechartsTooltipEntry[] };
-
-function ChartTooltip({ valueFormatter, ...rest }: { valueFormatter?: (v: number | string) => string } & Partial<RechartsTooltipData>) {
-  const { active, label, payload } = rest as RechartsTooltipData;
-  if (!active || !payload || payload.length === 0) return null;
-  const items = payload.filter((p: RechartsTooltipEntry) => p && p.value != null);
-  if (items.length === 0) return null;
-  const formatValue = (v: number | string) => {
-    if (valueFormatter) return valueFormatter(v);
-    return typeof v === "number" ? v.toFixed(2) : String(v);
-  };
-  return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/80 backdrop-blur px-3 py-2 shadow-lg">
-      {label != null && <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{String(label)}</div>}
-      <div className="space-y-1">
-        {items.map((entry: RechartsTooltipEntry, idx: number) => (
-          <div key={idx} className="flex items-center gap-2 text-sm">
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color || "#0ea5e9" }} />
-            {entry.name && <span className="text-slate-600 dark:text-slate-300">{entry.name}:</span>}
-            <span className="font-semibold text-slate-900 dark:text-slate-100">{formatValue(entry.value as number | string)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function uvCategory(uv?: number, lang: Lang = "en") {
-  const t = (key: TranslationKey) => translations[lang][key];
-  if (uv == null) return "—";
-  if (uv < 3) return t("uvLow");
-  if (uv < 6) return t("uvModerate");
-  if (uv < 8) return t("uvHigh");
-  if (uv < 11) return t("uvVeryHigh");
-  return t("uvExtreme");
-}
-
-function aqiCategory(aqi?: number, lang: Lang = "en") {
-  const t = (key: TranslationKey) => translations[lang][key];
-  if (aqi == null) return "—";
-  if (aqi <= 50) return t("aqiGood");
-  if (aqi <= 100) return t("aqiModerate");
-  if (aqi <= 150) return t("aqiSensitive");
-  if (aqi <= 200) return t("aqiUnhealthy");
-  if (aqi <= 300) return t("aqiVeryUnhealthy");
-  return t("aqiHazardous");
-}
-
-function AnimatedBackground({
-  isNight,
-  isRaining,
-  isWindy,
-  cloudiness,
-}: {
-  isNight: boolean;
-  isRaining: boolean;
-  isWindy: boolean;
-  cloudiness: "low" | "med" | "high";
-}) {
-  type CloudSpec = {
-    key: string;
-    topPct: number;
-    scale: number;
-    duration: number;
-    delay: number;
-    opacity: number;
-  };
-  type DropSpec = {
-    key: string;
-    leftPct: number;
-    duration: number;
-    delay: number;
-    height: number;
-    opacity: number;
-  };
-  type GustSpec = {
-    key: string;
-    topPct: number;
-    duration: number;
-    delay: number;
-    opacity: number;
-  };
-
-  const clouds = useMemo(() => {
-    const count = cloudiness === "high" ? 10 : cloudiness === "med" ? 6 : 3;
-    return Array.from({ length: count }).map((_, i): CloudSpec => ({
-      key: `cloud-${i}`,
-      topPct: 5 + ((i * 97) % 70),
-      scale: 0.8 + ((i * 37) % 40) / 40,
-      duration: 40 + ((i * 13) % 35),
-      delay: (i * 7) % 20,
-      opacity: isNight ? 0.15 : 0.35,
-    }));
-  }, [cloudiness, isNight]);
-
-  const drops = useMemo(() => {
-    if (!isRaining) return [] as DropSpec[];
-    const count = 80;
-    return Array.from({ length: count }).map((_, i): DropSpec => ({
-      key: `drop-${i}`,
-      leftPct: (i * 127) % 100,
-      duration: 0.8 + ((i * 17) % 50) / 50,
-      delay: ((i * 37) % 100) / 50,
-      height: 10 + ((i * 29) % 20),
-      opacity: isNight ? 0.35 : 0.5,
-    }));
-  }, [isRaining, isNight]);
-
-  const gusts = useMemo(() => {
-    if (!isWindy) return [] as GustSpec[];
-    const count = 12;
-    return Array.from({ length: count }).map((_, i): GustSpec => ({
-      key: `gust-${i}`,
-      topPct: ((i * 73) % 90) + 5,
-      duration: 6 + ((i * 19) % 8),
-      delay: ((i * 11) % 30) / 3,
-      opacity: isNight ? 0.15 : 0.25,
-    }));
-  }, [isWindy, isNight]);
-
-  return (
-    <div className="pointer-events-none fixed inset-0 -z-10" aria-hidden>
-      {/* Base sky gradient with subtle animated hue/position shift */}
-      <div className={cn(
-        "absolute inset-0 animate-[gradientShift_20s_linear_infinite]",
-        isNight
-          ? "bg-gradient-to-b from-slate-900 via-slate-950 to-black"
-          : "bg-gradient-to-b from-sky-100 via-cyan-100 to-white"
-      )} />
-
-      {/* Sun/Moon glow */}
-      <div className={cn(
-        "absolute -top-20 right-10 h-72 w-72 rounded-full blur-3xl",
-        isNight ? "bg-slate-400/10" : "bg-amber-200/40"
-      )} />
-
-      {/* Clouds */}
-      {clouds.map((c) => (
-        <div
-          key={c.key}
-          className="absolute -left-1/3 w-[50vw] h-24 md:h-28 lg:h-32 opacity-70"
-          style={{
-            top: `${c.topPct}%`,
-            animation: `cloudDrift ${c.duration}s linear ${c.delay}s infinite`,
-            opacity: c.opacity,
-            filter: "blur(2px)",
-            ['--cloud-scale']: c.scale,
-          } as CSSProperties & { ['--cloud-scale']: number }}
-        >
-          <div className={cn(
-            "absolute inset-0",
-            isNight ? "bg-slate-300/30" : "bg-white/70"
-          )} style={{ borderRadius: "40px", boxShadow: "0 20px 40px rgba(0,0,0,0.06)" }} />
-          <div className={cn(
-            "absolute -top-6 left-8 h-16 w-24 rounded-full",
-            isNight ? "bg-slate-200/25" : "bg-white/70"
-          )} />
-          <div className={cn(
-            "absolute -top-4 left-36 h-14 w-20 rounded-full",
-            isNight ? "bg-slate-200/25" : "bg-white/70"
-          )} />
-        </div>
-      ))}
-
-      {/* Rain */}
-      {drops.map((d) => (
-        <span
-          key={d.key}
-          className="absolute top-[-10%] w-[1px] bg-sky-500/60"
-          style={{
-            left: `${d.leftPct}%`,
-            height: `${d.height}px`,
-            animation: `rainFall ${d.duration}s linear ${d.delay}s infinite`,
-            opacity: d.opacity,
-          }}
-        />
-      ))}
-
-      {/* Wind gust trails */}
-      {gusts.map((g) => (
-        <span
-          key={g.key}
-          className="absolute left-[-20%] h-[2px] w-[25vw] rounded-full bg-cyan-400/30"
-          style={{
-            top: `${g.topPct}%`,
-            animation: `gustMove ${g.duration}s ease-in-out ${g.delay}s infinite`,
-            opacity: g.opacity,
-          }}
-        />
-      ))}
-
-      <style jsx>{`
-        @keyframes gradientShift {
-          0% { transform: translateY(0); filter: hue-rotate(0deg); }
-          50% { transform: translateY(-1.5%); filter: hue-rotate(6deg); }
-          100% { transform: translateY(0); filter: hue-rotate(0deg); }
-        }
-        @keyframes cloudDrift {
-          0% { transform: translateX(0) scale(var(--cloud-scale, 1)); }
-          100% { transform: translateX(140%) scale(var(--cloud-scale, 1)); }
-        }
-        @keyframes rainFall {
-          0% { transform: translateY(-10vh); }
-          100% { transform: translateY(110vh); }
-        }
-        @keyframes gustMove {
-          0% { transform: translateX(0) translateY(0) skewX(-10deg); opacity: 0; }
-          10% { opacity: 1; }
-          50% { transform: translateX(130%) translateY(-10px) skewX(-10deg); opacity: 0.7; }
-          100% { transform: translateX(260%) translateY(-18px) skewX(-10deg); opacity: 0; }
-        }
-      `}</style>
     </div>
   );
 }
