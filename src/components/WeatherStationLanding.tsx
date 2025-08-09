@@ -10,6 +10,149 @@ import type { CSSProperties } from "react";
 const API_BASE = "";
 const AUTO_REFRESH_MS = 30_000;
 
+// ---- i18n (en/fr) ----
+const SUPPORTED_LOCALES = ["en", "fr"] as const;
+type Lang = typeof SUPPORTED_LOCALES[number];
+
+type TranslationKey =
+  | "weatherStation"
+  | "online"
+  | "offline"
+  | "updated"
+  | "refresh"
+  | "sampleDataError"
+  | "sampleDataHint"
+  | "temperature"
+  | "humidity"
+  | "pressure"
+  | "wind"
+  | "rain"
+  | "uvIndex"
+  | "uvShort"
+  | "solar"
+  | "airQuality"
+  | "air"
+  | "relative"
+  | "seaLevelApprox"
+  | "gust"
+  | "today"
+  | "globalIrradiance"
+  | "trends"
+  | "last24h"
+  | "mean"
+  | "metric"
+  | "imperial"
+  | "autoRefreshEvery"
+  | "secondsShort"
+  | "uvLow"
+  | "uvModerate"
+  | "uvHigh"
+  | "uvVeryHigh"
+  | "uvExtreme"
+  | "aqiGood"
+  | "aqiModerate"
+  | "aqiSensitive"
+  | "aqiUnhealthy"
+  | "aqiVeryUnhealthy"
+  | "aqiHazardous";
+
+const translations: Record<Lang, Record<TranslationKey, string>> = {
+  en: {
+    weatherStation: "Weather Station",
+    online: "Online",
+    offline: "Offline",
+    updated: "Updated",
+    refresh: "Refresh",
+    sampleDataError: "Running on sample data. Connect your API.",
+    sampleDataHint: "update API_BASE & endpoints when ready.",
+    temperature: "Temperature",
+    humidity: "Humidity",
+    pressure: "Pressure",
+    wind: "Wind",
+    rain: "Rain",
+    uvIndex: "UV Index",
+    uvShort: "UV",
+    solar: "Solar",
+    airQuality: "Air Quality",
+    air: "Air",
+    relative: "Relative",
+    seaLevelApprox: "Sea‑level approx.",
+    gust: "Gust",
+    today: "Today",
+    globalIrradiance: "Global irradiance",
+    trends: "Trends",
+    last24h: "last 24h",
+    mean: "Mean",
+    metric: "Metric",
+    imperial: "Imperial",
+    autoRefreshEvery: "Auto‑refresh every",
+    secondsShort: "s",
+    uvLow: "Low",
+    uvModerate: "Moderate",
+    uvHigh: "High",
+    uvVeryHigh: "Very High",
+    uvExtreme: "Extreme",
+    aqiGood: "Good",
+    aqiModerate: "Moderate",
+    aqiSensitive: "Sensitive",
+    aqiUnhealthy: "Unhealthy",
+    aqiVeryUnhealthy: "Very Unhealthy",
+    aqiHazardous: "Hazardous",
+  },
+  fr: {
+    weatherStation: "Station météo",
+    online: "En ligne",
+    offline: "Hors ligne",
+    updated: "Mis à jour",
+    refresh: "Actualiser",
+    sampleDataError: "Utilisation de données d'exemple. Connectez votre API.",
+    sampleDataHint: "mettez à jour API_BASE et les endpoints lorsque prêt.",
+    temperature: "Température",
+    humidity: "Humidité",
+    pressure: "Pression",
+    wind: "Vent",
+    rain: "Pluie",
+    uvIndex: "Indice UV",
+    uvShort: "UV",
+    solar: "Solaire",
+    airQuality: "Qualité de l’air",
+    air: "Air",
+    relative: "Relative",
+    seaLevelApprox: "Niveau de la mer (approx.)",
+    gust: "Rafale",
+    today: "Aujourd’hui",
+    globalIrradiance: "Irradiance globale",
+    trends: "Tendances",
+    last24h: "dernières 24 h",
+    mean: "Moyenne",
+    metric: "Métrique",
+    imperial: "Impérial",
+    autoRefreshEvery: "Rafraîchissement auto toutes les",
+    secondsShort: "s",
+    uvLow: "Faible",
+    uvModerate: "Modéré",
+    uvHigh: "Élevé",
+    uvVeryHigh: "Très élevé",
+    uvExtreme: "Extrême",
+    aqiGood: "Bon",
+    aqiModerate: "Modéré",
+    aqiSensitive: "Sensible",
+    aqiUnhealthy: "Mauvais",
+    aqiVeryUnhealthy: "Très mauvais",
+    aqiHazardous: "Dangereux",
+  },
+};
+
+function detectLocale(): Lang {
+  try {
+    const nav = typeof navigator !== "undefined" ? navigator : undefined;
+    const raw = nav?.language || nav?.languages?.[0] || "en";
+    return raw.toLowerCase().startsWith("fr") ? "fr" : "en";
+  } catch {
+    return "en";
+  }
+}
+
 interface LocationInfo {
   name?: string;
   lat?: number;
@@ -87,15 +230,15 @@ function cn(...classes: Array<string | undefined | false>) {
   return classes.filter(Boolean).join(" ");
 }
 
-function fmtRelative(iso?: string) {
+function fmtRelative(iso?: string, lang: Lang = "en") {
   if (!iso) return "—";
   const d = new Date(iso);
   const now = new Date();
   const diff = Math.round((now.getTime() - d.getTime()) / 1000);
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return d.toLocaleString();
+  if (diff < 60) return lang === "fr" ? `il y a ${diff}s` : `${diff}s ago`;
+  if (diff < 3600) return lang === "fr" ? `il y a ${Math.floor(diff / 60)}m` : `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return lang === "fr" ? `il y a ${Math.floor(diff / 3600)}h` : `${Math.floor(diff / 3600)}h ago`;
+  return d.toLocaleString(lang);
 }
 
 function degToCompass(deg?: number) {
@@ -109,6 +252,12 @@ const UnitSystem = {
   METRIC: "metric",
   IMPERIAL: "imperial",
 } as const;
+
+function useI18n() {
+  const [lang] = useState<Lang>(() => detectLocale());
+  const t = (key: TranslationKey) => translations[lang][key];
+  return { lang, t };
+}
 
 function useUnitToggle() {
   const [unit, setUnit] = useState<typeof UnitSystem[keyof typeof UnitSystem]>(() => {
@@ -154,6 +303,7 @@ export default function WeatherStationLanding() {
   const [history, setHistory] = useState<HistoryPoint[]>(SAMPLE_HISTORY);
   const [error, setError] = useState<string | null>(null);
   const { unit, setUnit } = useUnitToggle();
+  const { lang, t } = useI18n();
 
   useEffect(() => {
     let cancelled = false;
@@ -173,7 +323,7 @@ export default function WeatherStationLanding() {
         const message = e instanceof Error ? e.message : String(e);
         console.warn("Using sample data (API not reachable)", message);
         if (!cancelled) {
-          setError("Running on sample data. Connect your API.");
+          setError(translations[lang].sampleDataError);
           // Ensure sample data is applied so changes to SAMPLE_* are reflected during dev
           setLatest(SAMPLE_LATEST);
           setHistory(SAMPLE_HISTORY);
@@ -283,7 +433,7 @@ export default function WeatherStationLanding() {
         <div className="mx-auto max-w-7xl px-6 py-10">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <div>
-              <h1 className="text-3xl md:text-5xl font-black tracking-tight">{latest?.station_name || "Weather Station"}</h1>
+              <h1 className="text-3xl md:text-5xl font-black tracking-tight">{latest?.station_name || t("weatherStation")}</h1>
               <div className="mt-2 flex items-center gap-3 text-slate-600 dark:text-slate-300">
                 <MapPin className="h-4 w-4" />
                 <span className="text-sm">
@@ -294,15 +444,15 @@ export default function WeatherStationLanding() {
                 </span>
                 <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", online ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200" : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200")}>
                   <span className={cn("h-2 w-2 rounded-full", online ? "bg-emerald-500" : "bg-rose-500")} />
-                  {online ? "Online" : "Offline"}
+                  {online ? t("online") : t("offline")}
                 </span>
                 <TimerReset className="h-4 w-4" />
-                <span className="text-sm">Updated {fmtRelative(latest?.timestamp)}</span>
+                <span className="text-sm">{t("updated")} {fmtRelative(latest?.timestamp, lang)}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <UnitToggle unit={unit} onChange={setUnit} />
-              <Button variant="outline" size="sm" onClick={() => location.reload()}>Refresh</Button>
+              <Button variant="outline" size="sm" onClick={() => location.reload()}>{t("refresh")}</Button>
             </div>
           </div>
         </div>
@@ -310,35 +460,35 @@ export default function WeatherStationLanding() {
 
       <main className="mx-auto max-w-7xl px-6 pb-16">
         {error && (
-          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">{error} — update API_BASE & endpoints when ready.</div>
+          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">{error} — {t("sampleDataHint")}</div>
         )}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          <SensorCard title="Temperature" value={display.temperature} icon={<Thermometer />} subtitle="Air" />
-          <SensorCard title="Humidity" value={display.humidity} icon={<Droplets />} subtitle="Relative" />
-          <SensorCard title="Pressure" value={display.pressure} icon={<Gauge />} subtitle="Sea‑level approx." />
-          <SensorCard title="Wind" value={`${display.windSpeed}`} icon={<Wind />} subtitle={`Gust ${display.windGust} • ${degToCompass(display.windDir)} (${display.windDir ?? "—"}°)`} />
-          <SensorCard title="Rain" value={display.rainRate} icon={<CloudRain />} subtitle={`Today ${display.rainDaily}`} />
-          <SensorCard title="UV Index" value={String(display.uv)} icon={<SunDim />} subtitle={uvCategory(latest?.uv_index)} />
-          <SensorCard title="Solar" value={String(display.solar)} icon={<SunDim />} subtitle="Global irradiance" />
-          <SensorCard title="Air Quality" value={String(display.aqi)} icon={<Leaf />} subtitle={aqiCategory(latest?.aqi)} />
+          <SensorCard title={t("temperature")} value={display.temperature} icon={<Thermometer />} subtitle={t("air")} />
+          <SensorCard title={t("humidity")} value={display.humidity} icon={<Droplets />} subtitle={t("relative")} />
+          <SensorCard title={t("pressure")} value={display.pressure} icon={<Gauge />} subtitle={t("seaLevelApprox")} />
+          <SensorCard title={t("wind")} value={`${display.windSpeed}`} icon={<Wind />} subtitle={`${t("gust")} ${display.windGust} • ${degToCompass(display.windDir)} (${display.windDir ?? "—"}°)`} />
+          <SensorCard title={t("rain")} value={display.rainRate} icon={<CloudRain />} subtitle={`${t("today")} ${display.rainDaily}`} />
+          <SensorCard title={t("uvIndex")} value={String(display.uv)} icon={<SunDim />} subtitle={uvCategory(latest?.uv_index, lang)} />
+          <SensorCard title={t("solar")} value={String(display.solar)} icon={<SunDim />} subtitle={t("globalIrradiance")} />
+          <SensorCard title={t("airQuality")} value={String(display.aqi)} icon={<Leaf />} subtitle={aqiCategory(latest?.aqi, lang)} />
         </section>
 
         <section className="mt-10">
           <Tabs defaultValue="temperature" className="w-full">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold">Trends (last 24h)</h2>
+              <h2 className="text-xl font-bold">{t("trends")} ({t("last24h")})</h2>
               <TabsList>
-                <TabsTrigger value="temperature">Temperature</TabsTrigger>
-                <TabsTrigger value="humidity">Humidity</TabsTrigger>
-                <TabsTrigger value="pressure">Pressure</TabsTrigger>
-                <TabsTrigger value="wind">Wind</TabsTrigger>
-                <TabsTrigger value="rain">Rain</TabsTrigger>
-                <TabsTrigger value="uv">UV</TabsTrigger>
+                <TabsTrigger value="temperature">{t("temperature")}</TabsTrigger>
+                <TabsTrigger value="humidity">{t("humidity")}</TabsTrigger>
+                <TabsTrigger value="pressure">{t("pressure")}</TabsTrigger>
+                <TabsTrigger value="wind">{t("wind")}</TabsTrigger>
+                <TabsTrigger value="rain">{t("rain")}</TabsTrigger>
+                <TabsTrigger value="uv">{t("uvShort")}</TabsTrigger>
               </TabsList>
             </div>
 
             <TabsContent value="temperature" className="mt-4">
-              <ChartCard title={`Temperature (${unit === UnitSystem.METRIC ? "°C" : "°F"})`}>
+              <ChartCard title={`${t("temperature")} (${unit === UnitSystem.METRIC ? "°C" : "°F"})`}>
                 <ResponsiveContainer width="100%" height={280}>
                   <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -352,7 +502,7 @@ export default function WeatherStationLanding() {
             </TabsContent>
 
             <TabsContent value="humidity" className="mt-4">
-              <ChartCard title="Humidity (%)">
+              <ChartCard title={`${t("humidity")} (%)`}>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -366,7 +516,7 @@ export default function WeatherStationLanding() {
             </TabsContent>
 
             <TabsContent value="pressure" className="mt-4">
-              <ChartCard title={`Pressure (${unit === UnitSystem.METRIC ? "hPa" : "inHg"})`}>
+              <ChartCard title={`${t("pressure")} (${unit === UnitSystem.METRIC ? "hPa" : "inHg"})`}>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -380,7 +530,7 @@ export default function WeatherStationLanding() {
             </TabsContent>
 
             <TabsContent value="wind" className="mt-4">
-              <ChartCard title={`Wind (${unit === UnitSystem.METRIC ? "km/h" : "mph"})`}>
+              <ChartCard title={`${t("wind")} (${unit === UnitSystem.METRIC ? "km/h" : "mph"})`}>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -388,15 +538,15 @@ export default function WeatherStationLanding() {
                     <YAxis domain={[0, "auto"]} />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="wind" name="Mean" dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="gust" name="Gust" dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="wind" name={t("mean")} dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="gust" name={t("gust")} dot={false} strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartCard>
             </TabsContent>
 
             <TabsContent value="rain" className="mt-4">
-              <ChartCard title={`Rain Rate (${unit === UnitSystem.METRIC ? "mm/h" : "in/h"})`}>
+              <ChartCard title={`${t("rain")} (${unit === UnitSystem.METRIC ? "mm/h" : "in/h"})`}>
                 <ResponsiveContainer width="100%" height={280}>
                   <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -410,7 +560,7 @@ export default function WeatherStationLanding() {
             </TabsContent>
 
             <TabsContent value="uv" className="mt-4">
-              <ChartCard title="UV Index">
+              <ChartCard title={t("uvIndex")}>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -428,8 +578,8 @@ export default function WeatherStationLanding() {
 
       <footer className="border-t border-slate-200/60 dark:border-slate-800 mt-12">
         <div className="mx-auto max-w-7xl px-6 py-6 text-sm text-slate-500 dark:text-slate-400 flex flex-col md:flex-row items-center justify-between gap-3">
-          <span>© {new Date().getFullYear()} Acesyde — Weather Station</span>
-          <span className="opacity-80">Auto‑refresh every {AUTO_REFRESH_MS / 1000}s</span>
+          <span>© {new Date().getFullYear()} Acesyde — {t("weatherStation")}</span>
+          <span className="opacity-80">{t("autoRefreshEvery")} {AUTO_REFRESH_MS / 1000}{t("secondsShort")}</span>
         </div>
       </footer>
     </div>
@@ -437,10 +587,11 @@ export default function WeatherStationLanding() {
 }
 
 function UnitToggle({ unit, onChange }: { unit: typeof UnitSystem[keyof typeof UnitSystem]; onChange: (u: typeof UnitSystem[keyof typeof UnitSystem]) => void }) {
+  const { t } = useI18n();
   return (
     <div className="inline-flex rounded-2xl bg-white/60 backdrop-blur border border-slate-200 overflow-hidden dark:bg-slate-800/60 dark:border-slate-700">
-      <button onClick={() => onChange(UnitSystem.METRIC)} className={cn("px-3 py-1.5 text-sm", unit === UnitSystem.METRIC ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300")}>Metric</button>
-      <button onClick={() => onChange(UnitSystem.IMPERIAL)} className={cn("px-3 py-1.5 text-sm", unit === UnitSystem.IMPERIAL ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300")}>Imperial</button>
+      <button onClick={() => onChange(UnitSystem.METRIC)} className={cn("px-3 py-1.5 text-sm", unit === UnitSystem.METRIC ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300")}>{t("metric")}</button>
+      <button onClick={() => onChange(UnitSystem.IMPERIAL)} className={cn("px-3 py-1.5 text-sm", unit === UnitSystem.IMPERIAL ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300")}>{t("imperial")}</button>
     </div>
   );
 }
@@ -475,23 +626,25 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
-function uvCategory(uv?: number) {
+function uvCategory(uv?: number, lang: Lang = "en") {
+  const t = (key: TranslationKey) => translations[lang][key];
   if (uv == null) return "—";
-  if (uv < 3) return "Low";
-  if (uv < 6) return "Moderate";
-  if (uv < 8) return "High";
-  if (uv < 11) return "Very High";
-  return "Extreme";
+  if (uv < 3) return t("uvLow");
+  if (uv < 6) return t("uvModerate");
+  if (uv < 8) return t("uvHigh");
+  if (uv < 11) return t("uvVeryHigh");
+  return t("uvExtreme");
 }
 
-function aqiCategory(aqi?: number) {
+function aqiCategory(aqi?: number, lang: Lang = "en") {
+  const t = (key: TranslationKey) => translations[lang][key];
   if (aqi == null) return "—";
-  if (aqi <= 50) return "Good";
-  if (aqi <= 100) return "Moderate";
-  if (aqi <= 150) return "Sensitive";
-  if (aqi <= 200) return "Unhealthy";
-  if (aqi <= 300) return "Very Unhealthy";
-  return "Hazardous";
+  if (aqi <= 50) return t("aqiGood");
+  if (aqi <= 100) return t("aqiModerate");
+  if (aqi <= 150) return t("aqiSensitive");
+  if (aqi <= 200) return t("aqiUnhealthy");
+  if (aqi <= 300) return t("aqiVeryUnhealthy");
+  return t("aqiHazardous");
 }
 
 function AnimatedBackground({
