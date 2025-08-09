@@ -5,11 +5,47 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, Area, AreaChart } from "recharts";
+import type { CSSProperties } from "react";
 
 const API_BASE = "";
 const AUTO_REFRESH_MS = 30_000;
 
-const SAMPLE_LATEST = {
+interface LocationInfo {
+  name?: string;
+  lat?: number;
+  lon?: number;
+}
+
+interface LatestWeather {
+  station_name?: string;
+  location?: LocationInfo;
+  timestamp?: string;
+  temperature_c?: number;
+  humidity_pct?: number;
+  pressure_hpa?: number;
+  wind_speed_ms?: number;
+  wind_gust_ms?: number;
+  wind_dir_deg?: number;
+  rain_rate_mm_h?: number;
+  rain_daily_mm?: number;
+  uv_index?: number;
+  solar_w_m2?: number;
+  aqi?: number;
+}
+
+interface HistoryPoint {
+  t: string;
+  temperature_c?: number;
+  humidity_pct?: number;
+  pressure_hpa?: number;
+  wind_speed_ms?: number;
+  wind_gust_ms?: number;
+  rain_rate_mm_h?: number;
+  rain_daily_mm?: number;
+  uv_index?: number;
+}
+
+const SAMPLE_LATEST: LatestWeather = {
   station_name: "Maison de Acesyde",
   location: { name: "Bordeaux, FR", lat: 44.84, lon: -0.58 },
   timestamp: new Date().toISOString(),
@@ -19,10 +55,10 @@ const SAMPLE_LATEST = {
   wind_speed_ms: 2.4,
   wind_gust_ms: 5.1,
   wind_dir_deg: 230,
-  rain_rate_mm_h: 0.10,
+  rain_rate_mm_h: 0.0,
   rain_daily_mm: 0.8,
   uv_index: 6.2,
-  solar_w_m2: 0,
+  solar_w_m2: 780,
   aqi: 22,
 };
 
@@ -32,7 +68,7 @@ function hoursAgo(h: number) {
   return d.toISOString();
 }
 
-const SAMPLE_HISTORY = Array.from({ length: 24 }).map((_, i) => {
+const SAMPLE_HISTORY: HistoryPoint[] = Array.from({ length: 24 }).map((_, i) => {
   const baseT = 18 + Math.sin((i / 24) * Math.PI * 2) * 5 + (Math.random() - 0.5);
   return {
     t: hoursAgo(24 - i),
@@ -114,8 +150,8 @@ async function fetchJSON<T>(path: string): Promise<T> {
 }
 
 export default function WeatherStationLanding() {
-  const [latest, setLatest] = useState(SAMPLE_LATEST as any);
-  const [history, setHistory] = useState(SAMPLE_HISTORY as any[]);
+  const [latest, setLatest] = useState<LatestWeather>(SAMPLE_LATEST);
+  const [history, setHistory] = useState<HistoryPoint[]>(SAMPLE_HISTORY);
   const [error, setError] = useState<string | null>(null);
   const { unit, setUnit } = useUnitToggle();
 
@@ -125,16 +161,23 @@ export default function WeatherStationLanding() {
       setError(null);
       try {
         const [l, h] = await Promise.all([
-          fetchJSON("/api/weather/latest"),
-          fetchJSON("/api/weather/history"),
-        ]);
+          fetchJSON<LatestWeather>("/api/weather/latest"),
+          fetchJSON<HistoryPoint[] | { points: HistoryPoint[] }>("/api/weather/history"),
+        ] as const);
         if (!cancelled) {
           setLatest(l);
-          setHistory((h as any).points || (h as any));
+          const points = Array.isArray(h) ? h : h.points;
+          setHistory(points);
         }
-      } catch (e: any) {
-        console.warn("Using sample data (API not reachable)", e?.message);
-        if (!cancelled) setError("Running on sample data. Connect your API.");
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.warn("Using sample data (API not reachable)", message);
+        if (!cancelled) {
+          setError("Running on sample data. Connect your API.");
+          // Ensure sample data is applied so changes to SAMPLE_* are reflected during dev
+          setLatest(SAMPLE_LATEST);
+          setHistory(SAMPLE_HISTORY);
+        }
       }
     };
     load();
@@ -192,13 +235,28 @@ export default function WeatherStationLanding() {
   }, [history, unit]);
 
   const conditions = useMemo(() => {
-    const solar = Number((latest as any)?.solar_w_m2 ?? 0);
-    const uv = Number((latest as any)?.uv_index ?? 0);
-    const rainRate = Number((latest as any)?.rain_rate_mm_h ?? 0);
-    const windSpeedMs = Number((latest as any)?.wind_speed_ms ?? 0);
-    const windGustMs = Number((latest as any)?.wind_gust_ms ?? 0);
+    const solarRaw = latest?.solar_w_m2;
+    const uvRaw = latest?.uv_index;
+    const solar = Number(solarRaw ?? NaN);
+    const uv = Number(uvRaw ?? NaN);
+    const rainRate = Number(latest?.rain_rate_mm_h ?? 0);
+    const windSpeedMs = Number(latest?.wind_speed_ms ?? 0);
+    const windGustMs = Number(latest?.wind_gust_ms ?? 0);
 
-    const isNight = (isNaN(solar) ? 0 : solar) < 50 && (isNaN(uv) ? 0 : uv) < 1.0;
+    const hasSolar = !isNaN(solar) && solarRaw != null;
+    const hasUv = !isNaN(uv) && uvRaw != null;
+    let isNight = false;
+    if (hasSolar && hasUv) {
+      // If both available, require both to indicate night
+      isNight = solar < 50 && uv < 1.0;
+    } else if (hasSolar) {
+      isNight = solar < 50;
+    } else if (hasUv) {
+      isNight = uv < 1.0;
+    } else {
+      const hour = new Date(latest?.timestamp ?? Date.now()).getHours();
+      isNight = hour < 6 || hour > 18;
+    }
     const isRaining = (isNaN(rainRate) ? 0 : rainRate) > 0.05;
     const isWindy = (isNaN(windGustMs) ? 0 : windGustMs) > 6 || (isNaN(windSpeedMs) ? 0 : windSpeedMs) > 4;
 
@@ -215,7 +273,7 @@ export default function WeatherStationLanding() {
   }, [latest]);
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-slate-900 dark:to-slate-950 text-slate-900 dark:text-slate-100">
+    <div className="relative min-h-screen text-slate-900 dark:text-slate-100 overflow-hidden">
       <AnimatedBackground isNight={conditions.isNight} isRaining={conditions.isRaining} isWindy={conditions.isWindy} cloudiness={conditions.cloudiness} />
       <header className="relative overflow-hidden">
         {/* Decorative header glow retained lightly for depth */}
@@ -260,9 +318,9 @@ export default function WeatherStationLanding() {
           <SensorCard title="Pressure" value={display.pressure} icon={<Gauge />} subtitle="Sea‑level approx." />
           <SensorCard title="Wind" value={`${display.windSpeed}`} icon={<Wind />} subtitle={`Gust ${display.windGust} • ${degToCompass(display.windDir)} (${display.windDir ?? "—"}°)`} />
           <SensorCard title="Rain" value={display.rainRate} icon={<CloudRain />} subtitle={`Today ${display.rainDaily}`} />
-          <SensorCard title="UV Index" value={String(display.uv)} icon={<SunDim />} subtitle={uvCategory(Number((latest as any)?.uv_index))} />
+          <SensorCard title="UV Index" value={String(display.uv)} icon={<SunDim />} subtitle={uvCategory(latest?.uv_index)} />
           <SensorCard title="Solar" value={String(display.solar)} icon={<SunDim />} subtitle="Global irradiance" />
-          <SensorCard title="Air Quality" value={String(display.aqi)} icon={<Leaf />} subtitle={aqiCategory(Number((latest as any)?.aqi))} />
+          <SensorCard title="Air Quality" value={String(display.aqi)} icon={<Leaf />} subtitle={aqiCategory(latest?.aqi)} />
         </section>
 
         <section className="mt-10">
@@ -447,9 +505,33 @@ function AnimatedBackground({
   isWindy: boolean;
   cloudiness: "low" | "med" | "high";
 }) {
+  type CloudSpec = {
+    key: string;
+    topPct: number;
+    scale: number;
+    duration: number;
+    delay: number;
+    opacity: number;
+  };
+  type DropSpec = {
+    key: string;
+    leftPct: number;
+    duration: number;
+    delay: number;
+    height: number;
+    opacity: number;
+  };
+  type GustSpec = {
+    key: string;
+    topPct: number;
+    duration: number;
+    delay: number;
+    opacity: number;
+  };
+
   const clouds = useMemo(() => {
     const count = cloudiness === "high" ? 10 : cloudiness === "med" ? 6 : 3;
-    return Array.from({ length: count }).map((_, i) => ({
+    return Array.from({ length: count }).map((_, i): CloudSpec => ({
       key: `cloud-${i}`,
       topPct: 5 + ((i * 97) % 70),
       scale: 0.8 + ((i * 37) % 40) / 40,
@@ -460,9 +542,9 @@ function AnimatedBackground({
   }, [cloudiness, isNight]);
 
   const drops = useMemo(() => {
-    if (!isRaining) return [] as Array<any>;
+    if (!isRaining) return [] as DropSpec[];
     const count = 80;
-    return Array.from({ length: count }).map((_, i) => ({
+    return Array.from({ length: count }).map((_, i): DropSpec => ({
       key: `drop-${i}`,
       leftPct: (i * 127) % 100,
       duration: 0.8 + ((i * 17) % 50) / 50,
@@ -473,9 +555,9 @@ function AnimatedBackground({
   }, [isRaining, isNight]);
 
   const gusts = useMemo(() => {
-    if (!isWindy) return [] as Array<any>;
+    if (!isWindy) return [] as GustSpec[];
     const count = 12;
-    return Array.from({ length: count }).map((_, i) => ({
+    return Array.from({ length: count }).map((_, i): GustSpec => ({
       key: `gust-${i}`,
       topPct: ((i * 73) % 90) + 5,
       duration: 6 + ((i * 19) % 8),
@@ -508,10 +590,10 @@ function AnimatedBackground({
           style={{
             top: `${c.topPct}%`,
             animation: `cloudDrift ${c.duration}s linear ${c.delay}s infinite`,
-            transform: `scale(${c.scale})`,
             opacity: c.opacity,
             filter: "blur(2px)",
-          }}
+            ['--cloud-scale']: c.scale,
+          } as CSSProperties & { ['--cloud-scale']: number }}
         >
           <div className={cn(
             "absolute inset-0",
@@ -562,8 +644,8 @@ function AnimatedBackground({
           100% { transform: translateY(0); filter: hue-rotate(0deg); }
         }
         @keyframes cloudDrift {
-          0% { transform: translateX(0) scale(var(--tw-scale-x,1)); }
-          100% { transform: translateX(140%) scale(var(--tw-scale-x,1)); }
+          0% { transform: translateX(0) scale(var(--cloud-scale, 1)); }
+          100% { transform: translateX(140%) scale(var(--cloud-scale, 1)); }
         }
         @keyframes rainFall {
           0% { transform: translateY(-10vh); }
