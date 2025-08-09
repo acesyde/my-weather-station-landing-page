@@ -20,6 +20,29 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Configuration (Wunderground / Weather.com PWS)
+
+The app fetches live data server‑side from the Weather Underground (Weather.com PWS) API. Add the following environment variables:
+
+- `WU_API_KEY`: your Weather.com API key
+- `WU_STATION_ID`: your PWS station ID (e.g. `IXXXXXXX`)
+
+Local development:
+
+1. Create a `.env.local` file in the project root with:
+
+   ```env
+   WU_API_KEY=your_api_key
+   WU_STATION_ID=your_station_id
+   ```
+
+2. Start the dev server. The client calls `/api/weather/latest` and `/api/weather/history`, which read these variables only on the server.
+
+Vercel deployment:
+
+1. In Vercel → Project → Settings → Environment Variables, add `WU_API_KEY` and `WU_STATION_ID` for Development, Preview, and Production.
+2. Redeploy. Secrets are not exposed to the client; only server routes access them.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

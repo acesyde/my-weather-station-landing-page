@@ -56,10 +56,61 @@ const SAMPLE_HISTORY: HistoryPoint[] = Array.from({ length: 24 }).map((_, i) => 
   };
 });
 
+type HttpError = Error & { status?: number };
+function httpError(status: number, message: string): HttpError {
+  const err = new Error(message) as HttpError;
+  err.status = status;
+  return err;
+}
+
 async function fetchJSON<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    try {
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const body = (await res.json()) as { error?: string } | unknown;
+        const maybeError = (body as { error?: string }).error;
+        const msg: string = typeof maybeError === "string" && maybeError.length > 0 ? maybeError : `HTTP ${res.status}`;
+        throw httpError(res.status, msg);
+      } else {
+        const text = await res.text();
+        throw httpError(res.status, text && text.length > 0 ? text : `HTTP ${res.status}`);
+      }
+    } catch {
+      // Fallback if parsing failed
+      throw httpError(res.status, `HTTP ${res.status}`);
+    }
+  }
   return res.json();
+}
+
+// Client-side throttle across remounts/renders (dev StrictMode safe)
+const CLIENT_TTL_MS = 30_000;
+let clientCacheAt = 0;
+let clientInFlight: Promise<{ latest: LatestWeather; history: HistoryPoint[] }> | null = null;
+let clientCache: { latest: LatestWeather; history: HistoryPoint[] } | null = null;
+
+async function fetchPairThrottled(): Promise<{ latest: LatestWeather; history: HistoryPoint[] }> {
+  const now = Date.now();
+  if (clientCache && now - clientCacheAt < CLIENT_TTL_MS) {
+    return clientCache;
+  }
+  if (clientInFlight) return clientInFlight;
+  clientInFlight = (async () => {
+    const [l, h] = await Promise.all([
+      fetchJSON<LatestWeather>("/api/weather/latest"),
+      fetchJSON<HistoryPoint[] | { points: HistoryPoint[] }>("/api/weather/history"),
+    ] as const);
+    const points = Array.isArray(h) ? h : h.points;
+    const payload = { latest: l, history: points };
+    clientCache = payload;
+    clientCacheAt = now;
+    return payload;
+  })().finally(() => {
+    clientInFlight = null;
+  });
+  return clientInFlight;
 }
 
 export default function WeatherStationLanding() {
@@ -71,36 +122,44 @@ export default function WeatherStationLanding() {
 
   useEffect(() => {
     let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const loadingRef = { current: false } as { current: boolean };
     const load = async () => {
+      if (loadingRef.current) return;
+      loadingRef.current = true;
       setError(null);
       try {
-        const [l, h] = await Promise.all([
-          fetchJSON<LatestWeather>("/api/weather/latest"),
-          fetchJSON<HistoryPoint[] | { points: HistoryPoint[] }>("/api/weather/history"),
-        ] as const);
+        const { latest: l, history: points } = await fetchPairThrottled();
         if (!cancelled) {
           setLatest(l);
-          const points = Array.isArray(h) ? h : h.points;
           setHistory(points);
         }
       } catch (e: unknown) {
+        const status = (e as { status?: number })?.status;
         const message = e instanceof Error ? e.message : String(e);
-        console.warn("Using sample data (API not reachable)", message);
+        console.warn("Weather API error", status, message);
         if (!cancelled) {
-          setError(t("sampleDataError"));
-          // Ensure sample data is applied so changes to SAMPLE_* are reflected during dev
+          setError(message || t("sampleDataError"));
+          // Apply sample data for display continuity
           setLatest(SAMPLE_LATEST);
           setHistory(SAMPLE_HISTORY);
+          // Stop auto-refresh on server errors to avoid looping
+          if (typeof status === "number" && status >= 500 && intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
         }
+      } finally {
+        loadingRef.current = false;
       }
     };
     load();
-    const id = setInterval(load, AUTO_REFRESH_MS);
+    intervalId = setInterval(load, AUTO_REFRESH_MS);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      if (intervalId) clearInterval(intervalId);
     };
-  }, [lang, t]);
+  }, [lang]);
 
   const online = useMemo(() => {
     if (!latest?.timestamp) return false;
@@ -234,9 +293,25 @@ export default function WeatherStationLanding() {
           <SensorCard title={t("pressure")} value={display.pressure} icon={<Gauge />} subtitle={t("seaLevelApprox")} />
           <SensorCard title={t("wind")} value={`${display.windSpeed}`} icon={<Wind />} subtitle={`${t("gust")} ${display.windGust} • ${degToCompass(display.windDir)} (${display.windDir ?? "—"}°)`} />
           <SensorCard title={t("rain")} value={display.rainRate} icon={<CloudRain />} subtitle={`${t("today")} ${display.rainDaily}`} />
-          <SensorCard title={t("uvIndex")} value={String(display.uv)} icon={<SunDim />} subtitle={uvCategory(latest?.uv_index, t)} />
+          <SensorCard
+            title={t("uvIndex")}
+            value={String(display.uv)}
+            icon={<SunDim />}
+            subtitle={uvCategory(
+              latest?.uv_index,
+              (k) => t(k as unknown as import("@/components/weather/i18n").TranslationKey)
+            )}
+          />
           <SensorCard title={t("solar")} value={String(display.solar)} icon={<SunDim />} subtitle={t("globalIrradiance")} />
-          <SensorCard title={t("airQuality")} value={String(display.aqi)} icon={<Leaf />} subtitle={aqiCategory(latest?.aqi, t)} />
+          <SensorCard
+            title={t("airQuality")}
+            value={String(display.aqi)}
+            icon={<Leaf />}
+            subtitle={aqiCategory(
+              latest?.aqi,
+              (k) => t(k as unknown as import("@/components/weather/i18n").TranslationKey)
+            )}
+          />
         </section>
 
         <section className="mt-10">

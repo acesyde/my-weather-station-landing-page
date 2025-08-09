@@ -34,7 +34,7 @@ export function degToCompass(deg?: number) {
 }
 
 export function uvCategory(uv?: number, t?: (k: string) => string) {
-  const translate = t ?? ((k: string) => k);
+  const translate: (k: string) => string = t ?? ((k: string) => k);
   if (uv == null) return "—";
   if (uv < 3) return translate("uvLow");
   if (uv < 6) return translate("uvModerate");
@@ -44,7 +44,7 @@ export function uvCategory(uv?: number, t?: (k: string) => string) {
 }
 
 export function aqiCategory(aqi?: number, t?: (k: string) => string) {
-  const translate = t ?? ((k: string) => k);
+  const translate: (k: string) => string = t ?? ((k: string) => k);
   if (aqi == null) return "—";
   if (aqi <= 50) return translate("aqiGood");
   if (aqi <= 100) return translate("aqiModerate");
