@@ -10,7 +10,7 @@ const API_BASE = "";
 const AUTO_REFRESH_MS = 30_000;
 
 const SAMPLE_LATEST = {
-  station_name: "Maison de Pierre‑Emmanuel",
+  station_name: "Maison de Acesyde",
   location: { name: "Bordeaux, FR", lat: 44.84, lon: -0.58 },
   timestamp: new Date().toISOString(),
   temperature_c: 24.6,
@@ -19,10 +19,10 @@ const SAMPLE_LATEST = {
   wind_speed_ms: 2.4,
   wind_gust_ms: 5.1,
   wind_dir_deg: 230,
-  rain_rate_mm_h: 0.0,
+  rain_rate_mm_h: 0.10,
   rain_daily_mm: 0.8,
   uv_index: 6.2,
-  solar_w_m2: 780,
+  solar_w_m2: 0,
   aqi: 22,
 };
 
@@ -191,11 +191,36 @@ export default function WeatherStationLanding() {
     }));
   }, [history, unit]);
 
+  const conditions = useMemo(() => {
+    const solar = Number((latest as any)?.solar_w_m2 ?? 0);
+    const uv = Number((latest as any)?.uv_index ?? 0);
+    const rainRate = Number((latest as any)?.rain_rate_mm_h ?? 0);
+    const windSpeedMs = Number((latest as any)?.wind_speed_ms ?? 0);
+    const windGustMs = Number((latest as any)?.wind_gust_ms ?? 0);
+
+    const isNight = (isNaN(solar) ? 0 : solar) < 50 && (isNaN(uv) ? 0 : uv) < 1.0;
+    const isRaining = (isNaN(rainRate) ? 0 : rainRate) > 0.05;
+    const isWindy = (isNaN(windGustMs) ? 0 : windGustMs) > 6 || (isNaN(windSpeedMs) ? 0 : windSpeedMs) > 4;
+
+    let cloudiness: "low" | "med" | "high" = "low";
+    if (!isNight) {
+      if (solar < 150 || uv < 2) cloudiness = "high";
+      else if (solar < 350 || uv < 4) cloudiness = "med";
+      else cloudiness = "low";
+    } else {
+      cloudiness = "med";
+    }
+
+    return { isNight, isRaining, isWindy, cloudiness };
+  }, [latest]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-slate-900 dark:to-slate-950 text-slate-900 dark:text-slate-100">
+    <div className="relative min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-slate-900 dark:to-slate-950 text-slate-900 dark:text-slate-100">
+      <AnimatedBackground isNight={conditions.isNight} isRaining={conditions.isRaining} isWindy={conditions.isWindy} cloudiness={conditions.cloudiness} />
       <header className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10 opacity-40 blur-3xl" aria-hidden>
-          <div className="h-72 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-sky-300 via-cyan-200 to-transparent dark:from-cyan-700/40 dark:via-sky-600/30" />
+        {/* Decorative header glow retained lightly for depth */}
+        <div className="absolute inset-0 -z-10 opacity-30 blur-3xl" aria-hidden>
+          <div className="h-72 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-sky-300 via-cyan-200 to-transparent dark:from-cyan-700/30 dark:via-sky-600/20" />
         </div>
         <div className="mx-auto max-w-7xl px-6 py-10">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
@@ -345,7 +370,7 @@ export default function WeatherStationLanding() {
 
       <footer className="border-t border-slate-200/60 dark:border-slate-800 mt-12">
         <div className="mx-auto max-w-7xl px-6 py-6 text-sm text-slate-500 dark:text-slate-400 flex flex-col md:flex-row items-center justify-between gap-3">
-          <span>© {new Date().getFullYear()} Pierre‑Emmanuel — Weather Station</span>
+          <span>© {new Date().getFullYear()} Acesyde — Weather Station</span>
           <span className="opacity-80">Auto‑refresh every {AUTO_REFRESH_MS / 1000}s</span>
         </div>
       </footer>
@@ -353,7 +378,7 @@ export default function WeatherStationLanding() {
   );
 }
 
-function UnitToggle({ unit, onChange }: { unit: string; onChange: (u: string) => void }) {
+function UnitToggle({ unit, onChange }: { unit: typeof UnitSystem[keyof typeof UnitSystem]; onChange: (u: typeof UnitSystem[keyof typeof UnitSystem]) => void }) {
   return (
     <div className="inline-flex rounded-2xl bg-white/60 backdrop-blur border border-slate-200 overflow-hidden dark:bg-slate-800/60 dark:border-slate-700">
       <button onClick={() => onChange(UnitSystem.METRIC)} className={cn("px-3 py-1.5 text-sm", unit === UnitSystem.METRIC ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300")}>Metric</button>
@@ -409,4 +434,148 @@ function aqiCategory(aqi?: number) {
   if (aqi <= 200) return "Unhealthy";
   if (aqi <= 300) return "Very Unhealthy";
   return "Hazardous";
+}
+
+function AnimatedBackground({
+  isNight,
+  isRaining,
+  isWindy,
+  cloudiness,
+}: {
+  isNight: boolean;
+  isRaining: boolean;
+  isWindy: boolean;
+  cloudiness: "low" | "med" | "high";
+}) {
+  const clouds = useMemo(() => {
+    const count = cloudiness === "high" ? 10 : cloudiness === "med" ? 6 : 3;
+    return Array.from({ length: count }).map((_, i) => ({
+      key: `cloud-${i}`,
+      topPct: 5 + ((i * 97) % 70),
+      scale: 0.8 + ((i * 37) % 40) / 40,
+      duration: 40 + ((i * 13) % 35),
+      delay: (i * 7) % 20,
+      opacity: isNight ? 0.15 : 0.35,
+    }));
+  }, [cloudiness, isNight]);
+
+  const drops = useMemo(() => {
+    if (!isRaining) return [] as Array<any>;
+    const count = 80;
+    return Array.from({ length: count }).map((_, i) => ({
+      key: `drop-${i}`,
+      leftPct: (i * 127) % 100,
+      duration: 0.8 + ((i * 17) % 50) / 50,
+      delay: ((i * 37) % 100) / 50,
+      height: 10 + ((i * 29) % 20),
+      opacity: isNight ? 0.35 : 0.5,
+    }));
+  }, [isRaining, isNight]);
+
+  const gusts = useMemo(() => {
+    if (!isWindy) return [] as Array<any>;
+    const count = 12;
+    return Array.from({ length: count }).map((_, i) => ({
+      key: `gust-${i}`,
+      topPct: ((i * 73) % 90) + 5,
+      duration: 6 + ((i * 19) % 8),
+      delay: ((i * 11) % 30) / 3,
+      opacity: isNight ? 0.15 : 0.25,
+    }));
+  }, [isWindy, isNight]);
+
+  return (
+    <div className="pointer-events-none fixed inset-0 -z-10" aria-hidden>
+      {/* Base sky gradient with subtle animated hue/position shift */}
+      <div className={cn(
+        "absolute inset-0 animate-[gradientShift_20s_linear_infinite]",
+        isNight
+          ? "bg-gradient-to-b from-slate-900 via-slate-950 to-black"
+          : "bg-gradient-to-b from-sky-100 via-cyan-100 to-white"
+      )} />
+
+      {/* Sun/Moon glow */}
+      <div className={cn(
+        "absolute -top-20 right-10 h-72 w-72 rounded-full blur-3xl",
+        isNight ? "bg-slate-400/10" : "bg-amber-200/40"
+      )} />
+
+      {/* Clouds */}
+      {clouds.map((c) => (
+        <div
+          key={c.key}
+          className="absolute -left-1/3 w-[50vw] h-24 md:h-28 lg:h-32 opacity-70"
+          style={{
+            top: `${c.topPct}%`,
+            animation: `cloudDrift ${c.duration}s linear ${c.delay}s infinite`,
+            transform: `scale(${c.scale})`,
+            opacity: c.opacity,
+            filter: "blur(2px)",
+          }}
+        >
+          <div className={cn(
+            "absolute inset-0",
+            isNight ? "bg-slate-300/30" : "bg-white/70"
+          )} style={{ borderRadius: "40px", boxShadow: "0 20px 40px rgba(0,0,0,0.06)" }} />
+          <div className={cn(
+            "absolute -top-6 left-8 h-16 w-24 rounded-full",
+            isNight ? "bg-slate-200/25" : "bg-white/70"
+          )} />
+          <div className={cn(
+            "absolute -top-4 left-36 h-14 w-20 rounded-full",
+            isNight ? "bg-slate-200/25" : "bg-white/70"
+          )} />
+        </div>
+      ))}
+
+      {/* Rain */}
+      {drops.map((d) => (
+        <span
+          key={d.key}
+          className="absolute top-[-10%] w-[1px] bg-sky-500/60"
+          style={{
+            left: `${d.leftPct}%`,
+            height: `${d.height}px`,
+            animation: `rainFall ${d.duration}s linear ${d.delay}s infinite`,
+            opacity: d.opacity,
+          }}
+        />
+      ))}
+
+      {/* Wind gust trails */}
+      {gusts.map((g) => (
+        <span
+          key={g.key}
+          className="absolute left-[-20%] h-[2px] w-[25vw] rounded-full bg-cyan-400/30"
+          style={{
+            top: `${g.topPct}%`,
+            animation: `gustMove ${g.duration}s ease-in-out ${g.delay}s infinite`,
+            opacity: g.opacity,
+          }}
+        />
+      ))}
+
+      <style jsx>{`
+        @keyframes gradientShift {
+          0% { transform: translateY(0); filter: hue-rotate(0deg); }
+          50% { transform: translateY(-1.5%); filter: hue-rotate(6deg); }
+          100% { transform: translateY(0); filter: hue-rotate(0deg); }
+        }
+        @keyframes cloudDrift {
+          0% { transform: translateX(0) scale(var(--tw-scale-x,1)); }
+          100% { transform: translateX(140%) scale(var(--tw-scale-x,1)); }
+        }
+        @keyframes rainFall {
+          0% { transform: translateY(-10vh); }
+          100% { transform: translateY(110vh); }
+        }
+        @keyframes gustMove {
+          0% { transform: translateX(0) translateY(0) skewX(-10deg); opacity: 0; }
+          10% { opacity: 1; }
+          50% { transform: translateX(130%) translateY(-10px) skewX(-10deg); opacity: 0.7; }
+          100% { transform: translateX(260%) translateY(-18px) skewX(-10deg); opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
 }
