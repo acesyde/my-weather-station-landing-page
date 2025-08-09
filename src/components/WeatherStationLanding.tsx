@@ -495,11 +495,18 @@ export default function WeatherStationLanding() {
               <ChartCard title={`${t("temperature")} (${unit === UnitSystem.METRIC ? "°C" : "°F"})`}>
                 <ResponsiveContainer width="100%" height={280}>
                   <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <defs>
+                      <linearGradient id="grad-temperature" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.35} />
+                        <stop offset="70%" stopColor="#f59e0b" stopOpacity={0.12} />
+                        <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
                     <XAxis dataKey="time" minTickGap={24} />
                     <YAxis domain={["auto", "auto"]} />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="temperature" fillOpacity={0.2} fill="currentColor" stroke="currentColor" />
+                    <Tooltip content={<ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(1)} ${unit === UnitSystem.METRIC ? "°C" : "°F"}`} />} />
+                    <Area type="monotone" dataKey="temperature" stroke="#f59e0b" strokeWidth={2.5} dot={false} fill="url(#grad-temperature)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -509,11 +516,11 @@ export default function WeatherStationLanding() {
               <ChartCard title={`${t("humidity")} (%)`}>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
                     <XAxis dataKey="time" minTickGap={24} />
                     <YAxis domain={[0, 100]} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="humidity" dot={false} strokeWidth={2} />
+                    <Tooltip content={<ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(0)} %`} />} />
+                    <Line type="monotone" dataKey="humidity" dot={false} stroke="#0ea5e9" strokeWidth={2.5} />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -523,11 +530,11 @@ export default function WeatherStationLanding() {
               <ChartCard title={`${t("pressure")} (${unit === UnitSystem.METRIC ? "hPa" : "inHg"})`}>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
                     <XAxis dataKey="time" minTickGap={24} />
                     <YAxis domain={["auto", "auto"]} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="pressure" dot={false} strokeWidth={2} />
+                    <Tooltip content={<ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(unit === UnitSystem.METRIC ? 1 : 2)} ${unit === UnitSystem.METRIC ? "hPa" : "inHg"}`} />} />
+                    <Line type="monotone" dataKey="pressure" dot={false} stroke="#8b5cf6" strokeWidth={2.5} />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -537,13 +544,13 @@ export default function WeatherStationLanding() {
               <ChartCard title={`${t("wind")} (${unit === UnitSystem.METRIC ? "km/h" : "mph"})`}>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
                     <XAxis dataKey="time" minTickGap={24} />
                     <YAxis domain={[0, "auto"]} />
-                    <Tooltip />
+                    <Tooltip content={<ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(1)} ${unit === UnitSystem.METRIC ? "km/h" : "mph"}`} />} />
                     <Legend />
-                    <Line type="monotone" dataKey="wind" name={t("mean")} dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="gust" name={t("gust")} dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="wind" name={t("mean")} dot={false} stroke="#10b981" strokeWidth={2.5} />
+                    <Line type="monotone" dataKey="gust" name={t("gust")} dot={false} stroke="#06b6d4" strokeWidth={2.5} />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -553,11 +560,18 @@ export default function WeatherStationLanding() {
               <ChartCard title={`${t("rain")} (${unit === UnitSystem.METRIC ? "mm/h" : "in/h"})`}>
                 <ResponsiveContainer width="100%" height={280}>
                   <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <defs>
+                      <linearGradient id="grad-rain" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
+                        <stop offset="70%" stopColor="#6366f1" stopOpacity={0.12} />
+                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
                     <XAxis dataKey="time" minTickGap={24} />
                     <YAxis domain={[0, "auto"]} />
-                    <Tooltip />
-                    <Area type="step" dataKey="rainRate" fillOpacity={0.25} fill="currentColor" stroke="currentColor" />
+                    <Tooltip content={<ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(2)} ${unit === UnitSystem.METRIC ? "mm/h" : "in/h"}`} />} />
+                    <Area type="step" dataKey="rainRate" stroke="#6366f1" strokeWidth={2} dot={false} fill="url(#grad-rain)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -566,13 +580,20 @@ export default function WeatherStationLanding() {
             <TabsContent value="uv" className="mt-4">
               <ChartCard title={t("uvIndex")}>
                 <ResponsiveContainer width="100%" height={280}>
-                  <LineChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                  <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 10 }}>
+                    <defs>
+                      <linearGradient id="grad-uv" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#eab308" stopOpacity={0.35} />
+                        <stop offset="70%" stopColor="#eab308" stopOpacity={0.12} />
+                        <stop offset="100%" stopColor="#eab308" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
                     <XAxis dataKey="time" minTickGap={24} />
                     <YAxis domain={[0, 12]} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="uv" dot={false} strokeWidth={2} />
-                  </LineChart>
+                    <Tooltip content={<ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(1)} UV`} />} />
+                    <Area type="monotone" dataKey="uv" stroke="#eab308" strokeWidth={2.5} dot={false} fill="url(#grad-uv)" />
+                  </AreaChart>
                 </ResponsiveContainer>
               </ChartCard>
             </TabsContent>
@@ -627,6 +648,34 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
       </CardHeader>
       <CardContent className="pt-4">{children}</CardContent>
     </Card>
+  );
+}
+
+type RechartsTooltipEntry = { name?: string; value?: number | string; color?: string };
+type RechartsTooltipData = { active?: boolean; label?: string | number; payload?: RechartsTooltipEntry[] };
+
+function ChartTooltip({ valueFormatter, ...rest }: { valueFormatter?: (v: number | string) => string } & Partial<RechartsTooltipData>) {
+  const { active, label, payload } = rest as RechartsTooltipData;
+  if (!active || !payload || payload.length === 0) return null;
+  const items = payload.filter((p: RechartsTooltipEntry) => p && p.value != null);
+  if (items.length === 0) return null;
+  const formatValue = (v: number | string) => {
+    if (valueFormatter) return valueFormatter(v);
+    return typeof v === "number" ? v.toFixed(2) : String(v);
+  };
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/80 backdrop-blur px-3 py-2 shadow-lg">
+      {label != null && <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{String(label)}</div>}
+      <div className="space-y-1">
+        {items.map((entry: RechartsTooltipEntry, idx: number) => (
+          <div key={idx} className="flex items-center gap-2 text-sm">
+            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color || "#0ea5e9" }} />
+            {entry.name && <span className="text-slate-600 dark:text-slate-300">{entry.name}:</span>}
+            <span className="font-semibold text-slate-900 dark:text-slate-100">{formatValue(entry.value as number | string)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
