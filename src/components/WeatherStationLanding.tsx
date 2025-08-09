@@ -11,8 +11,7 @@ const API_BASE = "";
 const AUTO_REFRESH_MS = 30_000;
 
 // ---- i18n (en/fr) ----
-const SUPPORTED_LOCALES = ["en", "fr"] as const;
-type Lang = typeof SUPPORTED_LOCALES[number];
+type Lang = "en" | "fr";
 
 type TranslationKey =
   | "weatherStation"
@@ -339,7 +338,7 @@ export default function WeatherStationLanding() {
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
+  }, [lang]);
 
   const online = useMemo(() => {
     if (!latest?.timestamp) return false;
