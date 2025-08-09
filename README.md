@@ -1,59 +1,145 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Weather Station (Next.js + Weather Underground PWS)
 
-## Getting Started
+Beautiful landing page for a personal weather station. It fetches live and historical data from Weather Underground (Weather.com PWS) via server‑side API routes and renders an animated, responsive dashboard.
 
-First, run the development server:
+### Features
+- **Live data**: Current observations from Weather.com PWS
+- **Trends**: Last 24h charts (temperature, humidity, pressure, wind, rain, UV)
+- **Unit toggle**: Metric/Imperial with local persistence
+- **Auto‑refresh**: Every 30s with graceful error handling
+- **Animated background**: Day/night, wind, rain cues
+- **i18n**: English and French (auto‑detect)
+- **Dark mode**: Tailwind CSS 4 design system
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Tech stack
+- **Next.js 15** (App Router) + **React 19**
+- **Tailwind CSS 4**, Radix UI primitives
+- **Recharts** for data viz, **lucide-react** icons
+
+## Quick start
+
+### Prerequisites
+- Node.js 18+ and your preferred package manager (uses `pnpm` lockfile)
+- Weather Underground / Weather.com API key and your station ID
+
+### 1) Configure environment
+Create `.env.local` in the project root:
+
+```env
+WU_API_KEY=your_api_key
+WU_STATION_ID=your_station_id
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Environment variables are validated at startup. If missing, the server process exits with a clear message.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 2) Install and run
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm install
+pnpm dev
+```
 
-## Configuration (Wunderground / Weather.com PWS)
+Open [http://localhost:3000](http://localhost:3000).
 
-The app fetches live data server‑side from the Weather Underground (Weather.com PWS) API. Add the following environment variables:
+## Environment validation
+The app validates env vars on boot via `src/lib/env-validation.ts` (called from `next.config.ts`).
+- **Required**:
+  - `WU_API_KEY`: Weather.com API key
+  - `WU_STATION_ID`: Station ID (e.g., `IXXXXXXX`)
+- Missing values will print a helpful message and terminate the server process to avoid undefined runtime behavior.
 
-- `WU_API_KEY`: your Weather.com API key
-- `WU_STATION_ID`: your PWS station ID (e.g. `IXXXXXXX`)
+## API routes (server‑side)
+Both routes are dynamic and lightly cached (30s TTL with `stale-while-revalidate`). They never expose your secrets to the client.
 
-Local development:
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/weather/latest` | Current observation mapped to `LatestWeather` |
+| GET | `/api/weather/history` | Last ~24h points mapped to `{ points: HistoryPoint[] }` |
 
-1. Create a `.env.local` file in the project root with:
+### GET /api/weather/latest
+Returns a subset of the PWS "current observations" in a normalized shape:
 
-   ```env
-   WU_API_KEY=your_api_key
-   WU_STATION_ID=your_station_id
-   ```
+```json
+{
+  "station_name": "Backyard WX",
+  "location": { "name": "Neighborhood", "lat": 37.77, "lon": -122.42 },
+  "timestamp": "2024-06-18T12:34:56.000Z",
+  "temperature_c": 22.4,
+  "humidity_pct": 56,
+  "pressure_hpa": 1014.2,
+  "wind_speed_ms": 1.7,
+  "wind_gust_ms": 4.3,
+  "wind_dir_deg": 250,
+  "rain_rate_mm_h": 0,
+  "rain_daily_mm": 0,
+  "uv_index": 4.5,
+  "solar_w_m2": 520,
+  "aqi": null
+}
+```
 
-2. Start the dev server. The client calls `/api/weather/latest` and `/api/weather/history`, which read these variables only on the server.
+Example:
 
-Vercel deployment:
+```bash
+curl -s http://localhost:3000/api/weather/latest | jq .
+```
 
+### GET /api/weather/history
+Combines today and yesterday from the PWS history endpoint, maps/filters to the last 24h, and returns:
+
+```json
+{
+  "points": [
+    {
+      "t": "2024-06-18T11:40:00.000Z",
+      "temperature_c": 21.8,
+      "humidity_pct": 60,
+      "pressure_hpa": 1013.9,
+      "wind_speed_ms": 1.2,
+      "wind_gust_ms": 2.8,
+      "rain_rate_mm_h": 0,
+      "rain_daily_mm": 0,
+      "uv_index": 3.7
+    }
+  ]
+}
+```
+
+Client code accepts either an array or `{ points }`; this route returns `{ points }`.
+
+## Development scripts
+
+```bash
+pnpm dev     # start dev server (Turbopack)
+pnpm build   # production build
+pnpm start   # start production server
+pnpm lint    # run ESLint
+```
+
+## Project structure
+
+```text
+src/
+  app/
+    api/weather/latest/route.ts     # current observation (server)
+    api/weather/history/route.ts    # last ~24h points (server)
+    page.tsx                        # landing page
+  components/
+    WeatherStationLanding.tsx       # main client UI
+    weather/                        # UI, charts, units, i18n
+  lib/
+    env-validation.ts               # env validation + getters
+```
+
+## Deployment (Vercel recommended)
 1. In Vercel → Project → Settings → Environment Variables, add `WU_API_KEY` and `WU_STATION_ID` for Development, Preview, and Production.
-2. Redeploy. Secrets are not exposed to the client; only server routes access them.
+2. Deploy. Only server routes read secrets; the client never sees them.
 
-## Learn More
+## Troubleshooting
+- **Process exits on boot**: Ensure `.env.local` has both `WU_API_KEY` and `WU_STATION_ID`.
+- **502 from API routes**: Upstream Weather.com error or invalid credentials. Check server logs; requests are made with `cache: "no-store"` and errors are surfaced to the client UI.
+- **No points around midnight**: History endpoint merges today+yesterday and then filters to last 24h; ensure your station reports regularly.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Learn more
+- Next.js docs: [https://nextjs.org/docs](https://nextjs.org/docs)
+- Recharts: [https://recharts.org/en-US](https://recharts.org/en-US)

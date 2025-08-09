@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { LatestWeather } from "@/components/weather/types";
+import { getEnvConfig } from "@/lib/env-validation";
 
 type PwsCurrentMetric = {
   temp?: number;
@@ -28,10 +29,7 @@ type PwsCurrentResponse = {
   observations?: PwsCurrentObservation[];
 };
 
-function getEnv(name: string): string | undefined {
-  const v = process.env[name];
-  return v && v.length > 0 ? v : undefined;
-}
+
 
 export const dynamic = "force-dynamic";
 
@@ -40,42 +38,11 @@ let cached: { data: LatestWeather; at: number } | null = null;
 let inFlight: Promise<LatestWeather> | null = null;
 
 export async function GET() {
-  const apiKey = getEnv("WU_API_KEY");
-  const stationId = getEnv("WU_STATION_ID");
-  const isProd = process.env.NODE_ENV === "production";
+  const { WU_API_KEY: apiKey, WU_STATION_ID: stationId } = getEnvConfig();
 
   // Serve from cache if fresh
   if (cached && Date.now() - cached.at < TTL_MS) {
     return NextResponse.json(cached.data, {
-      headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=15" },
-    });
-  }
-  if (!apiKey || !stationId) {
-    if (isProd) {
-      return NextResponse.json(
-        { error: "Missing WU_API_KEY or WU_STATION_ID environment variables" },
-        { status: 500 }
-      );
-    }
-    // Dev-friendly fallback: serve sample data to avoid noisy 500s in local dev
-    const sample: LatestWeather = {
-      station_name: "Sample Station",
-      location: { name: "Local Dev", lat: 0, lon: 0 },
-      timestamp: new Date().toISOString(),
-      temperature_c: 22.3,
-      humidity_pct: 55,
-      pressure_hpa: 1013.5,
-      wind_speed_ms: 1.8,
-      wind_gust_ms: 3.2,
-      wind_dir_deg: 180,
-      rain_rate_mm_h: 0,
-      rain_daily_mm: 0.2,
-      uv_index: 5.0,
-      solar_w_m2: 600,
-      aqi: undefined,
-    };
-    cached = { data: sample, at: Date.now() };
-    return NextResponse.json(sample, {
       headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=15" },
     });
   }

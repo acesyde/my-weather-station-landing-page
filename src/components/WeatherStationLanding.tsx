@@ -18,43 +18,7 @@ import { cn } from "@/lib/utils";
 const API_BASE = "";
 const AUTO_REFRESH_MS = 30_000;
 
-const SAMPLE_LATEST: LatestWeather = {
-  station_name: "Maison de Acesyde",
-  location: { name: "Bordeaux, FR", lat: 44.84, lon: -0.58 },
-  timestamp: new Date().toISOString(),
-  temperature_c: 24.6,
-  humidity_pct: 58,
-  pressure_hpa: 1016.3,
-  wind_speed_ms: 2.4,
-  wind_gust_ms: 5.1,
-  wind_dir_deg: 230,
-  rain_rate_mm_h: 0.0,
-  rain_daily_mm: 0.8,
-  uv_index: 6.2,
-  solar_w_m2: 780,
-  aqi: 22,
-};
 
-function hoursAgo(h: number) {
-  const d = new Date();
-  d.setHours(d.getHours() - h);
-  return d.toISOString();
-}
-
-const SAMPLE_HISTORY: HistoryPoint[] = Array.from({ length: 24 }).map((_, i) => {
-  const baseT = 18 + Math.sin((i / 24) * Math.PI * 2) * 5 + (Math.random() - 0.5);
-  return {
-    t: hoursAgo(24 - i),
-    temperature_c: Number(baseT.toFixed(2)),
-    humidity_pct: Math.round(55 + Math.cos((i / 24) * Math.PI * 2) * 15),
-    pressure_hpa: Number((1014 + Math.sin(i / 8) * 2).toFixed(1)),
-    wind_speed_ms: Number((1.5 + Math.random() * 3).toFixed(1)),
-    wind_gust_ms: Number((2.5 + Math.random() * 4).toFixed(1)),
-    rain_rate_mm_h: i % 7 === 0 ? Number((Math.random() * 2).toFixed(1)) : 0,
-    rain_daily_mm: Number((i * 0.03).toFixed(2)),
-    uv_index: Math.max(0, Number((Math.sin(((i - 6) / 24) * Math.PI) * 7).toFixed(1))),
-  };
-});
 
 type HttpError = Error & { status?: number };
 function httpError(status: number, message: string): HttpError {
@@ -85,76 +49,56 @@ async function fetchJSON<T>(path: string): Promise<T> {
   return res.json();
 }
 
-// Client-side throttle across remounts/renders (dev StrictMode safe)
-const CLIENT_TTL_MS = 30_000;
-let clientCacheAt = 0;
-let clientInFlight: Promise<{ latest: LatestWeather; history: HistoryPoint[] }> | null = null;
-let clientCache: { latest: LatestWeather; history: HistoryPoint[] } | null = null;
-
-async function fetchPairThrottled(): Promise<{ latest: LatestWeather; history: HistoryPoint[] }> {
-  const now = Date.now();
-  if (clientCache && now - clientCacheAt < CLIENT_TTL_MS) {
-    return clientCache;
-  }
-  if (clientInFlight) return clientInFlight;
-  clientInFlight = (async () => {
-    const [l, h] = await Promise.all([
-      fetchJSON<LatestWeather>("/api/weather/latest"),
-      fetchJSON<HistoryPoint[] | { points: HistoryPoint[] }>("/api/weather/history"),
-    ] as const);
-    const points = Array.isArray(h) ? h : h.points;
-    const payload = { latest: l, history: points };
-    clientCache = payload;
-    clientCacheAt = now;
-    return payload;
-  })().finally(() => {
-    clientInFlight = null;
-  });
-  return clientInFlight;
+async function fetchWeatherData(): Promise<{ latest: LatestWeather; history: HistoryPoint[] }> {
+  const [latest, historyResponse] = await Promise.all([
+    fetchJSON<LatestWeather>("/api/weather/latest"),
+    fetchJSON<HistoryPoint[] | { points: HistoryPoint[] }>("/api/weather/history"),
+  ]);
+  
+  const history = Array.isArray(historyResponse) ? historyResponse : historyResponse.points;
+  return { latest, history };
 }
 
 export default function WeatherStationLanding() {
-  const [latest, setLatest] = useState<LatestWeather>(SAMPLE_LATEST);
-  const [history, setHistory] = useState<HistoryPoint[]>(SAMPLE_HISTORY);
+  const [latest, setLatest] = useState<LatestWeather | null>(null);
+  const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const { unit, setUnit } = useUnitToggle();
   const { lang, t } = useI18n();
 
   useEffect(() => {
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | null = null;
-    const loadingRef = { current: false } as { current: boolean };
+    
     const load = async () => {
-      if (loadingRef.current) return;
-      loadingRef.current = true;
-      setError(null);
       try {
-        const { latest: l, history: points } = await fetchPairThrottled();
+        setError(null);
+        const { latest: l, history: points } = await fetchWeatherData();
         if (!cancelled) {
           setLatest(l);
           setHistory(points);
+          setLoading(false);
         }
       } catch (e: unknown) {
         const status = (e as { status?: number })?.status;
         const message = e instanceof Error ? e.message : String(e);
         console.warn("Weather API error", status, message);
         if (!cancelled) {
-          setError(message || t("sampleDataError"));
-          // Apply sample data for display continuity
-          setLatest(SAMPLE_LATEST);
-          setHistory(SAMPLE_HISTORY);
+          setError(message || "Failed to load weather data");
+          setLoading(false);
           // Stop auto-refresh on server errors to avoid looping
           if (typeof status === "number" && status >= 500 && intervalId) {
             clearInterval(intervalId);
             intervalId = null;
           }
         }
-      } finally {
-        loadingRef.current = false;
       }
     };
+    
     load();
     intervalId = setInterval(load, AUTO_REFRESH_MS);
+    
     return () => {
       cancelled = true;
       if (intervalId) clearInterval(intervalId);
@@ -256,7 +200,7 @@ export default function WeatherStationLanding() {
         <div className="mx-auto max-w-7xl px-6 py-10">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <div>
-              <h1 className="text-3xl md:text-5xl font-black tracking-tight">{latest?.station_name || t("weatherStation")}</h1>
+              <h1 className="text-3xl md:text-5xl font-black tracking-tight">{latest?.station_name || "Weather Station"}</h1>
               <div className="mt-2 flex items-center gap-3 text-slate-600 dark:text-slate-300">
                 <MapPin className="h-4 w-4" />
                 <span className="text-sm">
@@ -284,8 +228,15 @@ export default function WeatherStationLanding() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 pb-16">
+        {loading && (
+          <div className="mb-6 rounded-xl border border-blue-300 bg-blue-50 p-4 text-blue-900 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
+            Loading weather data...
+          </div>
+        )}
         {error && (
-          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">{error} — {t("sampleDataHint")}</div>
+          <div className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-red-900 dark:border-red-700 dark:bg-red-900/20 dark:text-red-200">
+            {error}
+          </div>
         )}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           <SensorCard title={t("temperature")} value={display.temperature} icon={<Thermometer />} subtitle={t("air")} />

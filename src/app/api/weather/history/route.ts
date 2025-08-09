@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { HistoryPoint } from "@/components/weather/types";
+import { getEnvConfig } from "@/lib/env-validation";
 
 type PwsHistoryMetric = {
   tempAvg?: number;
@@ -26,10 +27,7 @@ type PwsHistoryResponse = {
   observations?: PwsHistoryRow[];
 };
 
-function getEnv(name: string): string | undefined {
-  const v = process.env[name];
-  return v && v.length > 0 ? v : undefined;
-}
+
 
 export const dynamic = "force-dynamic";
 
@@ -38,43 +36,11 @@ let cached: { data: { points: HistoryPoint[] }; at: number } | null = null;
 let inFlight: Promise<{ points: HistoryPoint[] }> | null = null;
 
 export async function GET() {
-  const apiKey = getEnv("WU_API_KEY");
-  const stationId = getEnv("WU_STATION_ID");
-  const isProd = process.env.NODE_ENV === "production";
+  const { WU_API_KEY: apiKey, WU_STATION_ID: stationId } = getEnvConfig();
+
   // Serve from cache if within TTL
   if (cached && Date.now() - cached.at < TTL_MS) {
     return NextResponse.json(cached.data, {
-      headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=15" },
-    });
-  }
-  if (!apiKey || !stationId) {
-    if (isProd) {
-      return NextResponse.json(
-        { error: "Missing WU_API_KEY or WU_STATION_ID environment variables" },
-        { status: 500 }
-      );
-    }
-    // Dev-friendly fallback: generate synthetic 24h history for local dev
-    const now = Date.now();
-    const mk = (hAgo: number): HistoryPoint => {
-      const t = new Date(now - hAgo * 3600 * 1000).toISOString();
-      const base = 20 + Math.sin((hAgo / 24) * Math.PI * 2) * 4;
-      return {
-        t,
-        temperature_c: Number(base.toFixed(1)),
-        humidity_pct: Math.round(50 + Math.cos((hAgo / 24) * Math.PI * 2) * 10),
-        pressure_hpa: Number((1014 + Math.sin(hAgo / 8) * 1.5).toFixed(1)),
-        wind_speed_ms: Number((1 + Math.random() * 2).toFixed(1)),
-        wind_gust_ms: Number((2 + Math.random() * 3).toFixed(1)),
-        rain_rate_mm_h: 0,
-        rain_daily_mm: Number(((24 - hAgo) * 0.02).toFixed(2)),
-        uv_index: Math.max(0, Number((Math.sin(((24 - hAgo - 6) / 24) * Math.PI) * 7).toFixed(1))),
-      };
-    };
-    const points: HistoryPoint[] = Array.from({ length: 24 }).map((_, i) => mk(24 - i));
-    const payload = { points };
-    cached = { data: payload, at: Date.now() };
-    return NextResponse.json(payload, {
       headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=15" },
     });
   }
