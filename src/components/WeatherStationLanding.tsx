@@ -9,6 +9,7 @@ import ChartCard from "@/components/weather/ChartCard";
 import ChartTooltip from "@/components/weather/ChartTooltip";
 import SensorCard from "@/components/weather/SensorCard";
 import UnitToggle from "@/components/weather/UnitToggle";
+import ThemeToggle from "@/components/ThemeToggle";
 import { useI18n } from "@/components/weather/i18n";
 import { UnitSystem, useUnitToggle, toF, toKPH, toMPH, toInHg, toIn } from "@/components/weather/UnitSystem";
 import type { LatestWeather, HistoryPoint } from "@/components/weather/types";
@@ -190,18 +191,18 @@ export default function WeatherStationLanding() {
   }, [latest]);
 
   return (
-    <div className="relative min-h-screen text-slate-900 dark:text-slate-100 overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden">
       <AnimatedBackground isNight={conditions.isNight} isRaining={conditions.isRaining} isWindy={conditions.isWindy} cloudiness={conditions.cloudiness} />
       <header className="relative overflow-hidden">
-        {/* Decorative header glow retained lightly for depth */}
-        <div className="absolute inset-0 -z-10 opacity-30 blur-3xl" aria-hidden>
-          <div className="h-72 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-sky-300 via-cyan-200 to-transparent dark:from-cyan-700/30 dark:via-sky-600/20" />
+        {/* Decorative header glow tuned to tokens for better dark harmony */}
+        <div className="absolute inset-0 -z-10 opacity-25 blur-3xl" aria-hidden>
+          <div className="h-72 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/20 via-primary/10 to-transparent dark:from-primary/12 dark:via-primary/6" />
         </div>
         <div className="mx-auto max-w-7xl px-6 py-10">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <div>
               <h1 className="text-3xl md:text-5xl font-black tracking-tight">{latest?.station_name || "Weather Station"}</h1>
-              <div className="mt-2 flex items-center gap-3 text-slate-600 dark:text-slate-300">
+              <div className="mt-2 flex items-center gap-3 text-muted-foreground">
                 <MapPin className="h-4 w-4" />
                 <span className="text-sm">
                   {latest?.location?.name || "—"}
@@ -221,6 +222,7 @@ export default function WeatherStationLanding() {
             </div>
             <div className="flex items-center gap-2">
               <UnitToggle unit={unit} onChange={setUnit} />
+              <ThemeToggle />
               <Button variant="outline" size="sm" onClick={() => location.reload()}>{t("refresh")}</Button>
             </div>
           </div>
@@ -389,8 +391,8 @@ export default function WeatherStationLanding() {
         </section>
       </main>
 
-      <footer className="border-t border-slate-200/60 dark:border-slate-800 mt-12">
-        <div className="mx-auto max-w-7xl px-6 py-6 text-sm text-slate-500 dark:text-slate-400 flex flex-col md:flex-row items-center justify-between gap-3">
+      <footer className="border-t border-border mt-12">
+        <div className="mx-auto max-w-7xl px-6 py-6 text-sm text-muted-foreground flex flex-col md:flex-row items-center justify-between gap-3">
           <span>© {new Date().getFullYear()} Acesyde — {t("weatherStation")}</span>
           <span className="opacity-80">{t("autoRefreshEvery")} {AUTO_REFRESH_MS / 1000}{t("secondsShort")}</span>
         </div>

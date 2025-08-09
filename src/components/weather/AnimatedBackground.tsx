@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +39,18 @@ export function AnimatedBackground({
     opacity: number;
   };
 
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setIsDarkTheme(root.classList.contains("dark"));
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
+  const dim = isNight || isDarkTheme;
+
   const clouds = useMemo(() => {
     const count = cloudiness === "high" ? 10 : cloudiness === "med" ? 6 : 3;
     return Array.from({ length: count }).map((_, i): CloudSpec => ({
@@ -47,9 +59,9 @@ export function AnimatedBackground({
       scale: 0.8 + ((i * 37) % 40) / 40,
       duration: 40 + ((i * 13) % 35),
       delay: (i * 7) % 20,
-      opacity: isNight ? 0.15 : 0.35,
+      opacity: dim ? 0.15 : 0.35,
     }));
-  }, [cloudiness, isNight]);
+  }, [cloudiness, dim]);
 
   const drops = useMemo(() => {
     if (!isRaining) return [] as DropSpec[];
@@ -60,9 +72,9 @@ export function AnimatedBackground({
       duration: 0.8 + ((i * 17) % 50) / 50,
       delay: ((i * 37) % 100) / 50,
       height: 10 + ((i * 29) % 20),
-      opacity: isNight ? 0.35 : 0.5,
+      opacity: dim ? 0.35 : 0.5,
     }));
-  }, [isRaining, isNight]);
+  }, [isRaining, dim]);
 
   const gusts = useMemo(() => {
     if (!isWindy) return [] as GustSpec[];
@@ -72,20 +84,20 @@ export function AnimatedBackground({
       topPct: ((i * 73) % 90) + 5,
       duration: 6 + ((i * 19) % 8),
       delay: ((i * 11) % 30) / 3,
-      opacity: isNight ? 0.15 : 0.25,
+      opacity: dim ? 0.15 : 0.25,
     }));
-  }, [isWindy, isNight]);
+  }, [isWindy, dim]);
 
   return (
     <div className="pointer-events-none fixed inset-0 -z-10" aria-hidden>
       <div
         className={cn(
           "absolute inset-0 animate-[gradientShift_20s_linear_infinite]",
-          isNight ? "bg-gradient-to-b from-slate-900 via-slate-950 to-black" : "bg-gradient-to-b from-sky-100 via-cyan-100 to-white"
+          dim ? "bg-gradient-to-b from-slate-900 via-slate-950 to-black" : "bg-gradient-to-b from-sky-100 via-cyan-100 to-white"
         )}
       />
 
-      <div className={cn("absolute -top-20 right-10 h-72 w-72 rounded-full blur-3xl", isNight ? "bg-slate-400/10" : "bg-amber-200/40")} />
+      <div className={cn("absolute -top-20 right-10 h-72 w-72 rounded-full blur-3xl", dim ? "bg-slate-400/10" : "bg-amber-200/40")} />
 
       {clouds.map((c) => (
         <div
@@ -100,11 +112,11 @@ export function AnimatedBackground({
           } as CSSProperties & { ["--cloud-scale"]: number }}
         >
           <div
-            className={cn("absolute inset-0", isNight ? "bg-slate-300/30" : "bg-white/70")}
+            className={cn("absolute inset-0", dim ? "bg-slate-300/30" : "bg-white/70")}
             style={{ borderRadius: "40px", boxShadow: "0 20px 40px rgba(0,0,0,0.06)" }}
           />
-          <div className={cn("absolute -top-6 left-8 h-16 w-24 rounded-full", isNight ? "bg-slate-200/25" : "bg-white/70")} />
-          <div className={cn("absolute -top-4 left-36 h-14 w-20 rounded-full", isNight ? "bg-slate-200/25" : "bg-white/70")} />
+          <div className={cn("absolute -top-6 left-8 h-16 w-24 rounded-full", dim ? "bg-slate-200/25" : "bg-white/70")} />
+          <div className={cn("absolute -top-4 left-36 h-14 w-20 rounded-full", dim ? "bg-slate-200/25" : "bg-white/70")} />
         </div>
       ))}
 

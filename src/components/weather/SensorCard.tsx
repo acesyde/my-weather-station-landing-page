@@ -15,14 +15,14 @@ export function SensorCard({
   subtitle?: string;
 }) {
   return (
-    <Card className="rounded-2xl shadow-sm hover:shadow transition-shadow bg-white/70 dark:bg-slate-900/60 backdrop-blur border-slate-200/80 dark:border-slate-800">
+    <Card className="rounded-2xl shadow-sm hover:shadow transition-shadow bg-card/80 backdrop-blur border-border">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200">{icon}</span>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">{icon}</span>
             {title}
           </CardTitle>
-          {subtitle && <span className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</span>}
+          {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
         </div>
       </CardHeader>
       <CardContent>
